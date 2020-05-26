@@ -10,6 +10,7 @@ HANDLE fThread[THREADCOUNT]; // сихрон. доступ в критическ
 HANDLE fMutex;
 
 HANDLE sem_F, sem_G, sem_H; // семафоры для сихрон.
+HANDLE sem_pause, sem_next;
 
 DWORD WINAPI Thread_a(LPVOID);
 DWORD WINAPI Thread_b(LPVOID);
@@ -17,10 +18,8 @@ DWORD WINAPI Thread_c(LPVOID);
 DWORD WINAPI Thread_d(LPVOID);
 DWORD WINAPI Thread_e(LPVOID);
 DWORD WINAPI Thread_f(LPVOID);
-DWORD WINAPI Thread_f_semaphore(LPVOID);
 DWORD WINAPI Thread_g(LPVOID);
 DWORD WINAPI Thread_h(LPVOID);
-DWORD WINAPI Thread_h_semaphore(LPVOID);
 DWORD WINAPI Thread_i(LPVOID);
 DWORD WINAPI Thread_k(LPVOID);
 DWORD WINAPI Thread_m(LPVOID);
@@ -42,6 +41,8 @@ const char* lab3_sequential_threads()
 
 DWORD WINAPI Thread_a(LPVOID lpParam) {
 
+    UNREFERENCED_PARAMETER(lpParam);
+    //////////////////1///////////////////////
     // THREAD B
     fThread[1] = CreateThread(NULL, 0, Thread_b, NULL, 0, &ThreadID);
     // (1)NULL - аттрибуты безопасности
@@ -73,11 +74,8 @@ DWORD WINAPI Thread_a(LPVOID lpParam) {
         ReleaseMutex(fMutex);
     }
 
-    WaitForSingleObject(fThread[1], INFINITE); //b wait
-    WaitForSingleObject(fThread[3], INFINITE); //d wait
-
-    CloseHandle(fThread[1]); // закрываем дескриптор потока
-    CloseHandle(fThread[3]); // закрываем дескриптор потока
+    WaitForSingleObject(sem_pause, INFINITE); // b
+    WaitForSingleObject(sem_pause, INFINITE); // d
 
     // THREAD C
     fThread[2] = CreateThread(NULL, 0, Thread_c, NULL, 0, &ThreadID);
@@ -93,12 +91,13 @@ DWORD WINAPI Thread_a(LPVOID lpParam) {
 
     WaitForSingleObject(fThread[2], INFINITE); //c wait
 
-    CloseHandle(fThread[2]);
-
     return 0;
 }
 
 DWORD WINAPI Thread_b(LPVOID lpParam) {
+
+    UNREFERENCED_PARAMETER(lpParam);
+    ////////////////1/////////////////////
     for (int a = 0; a < 3; a++)
     {
         WaitForSingleObject(fMutex, INFINITE); // ждем пока поток закончит работу
@@ -106,10 +105,49 @@ DWORD WINAPI Thread_b(LPVOID lpParam) {
         computation();
         ReleaseMutex(fMutex);
     }
+
+    ReleaseSemaphore(sem_pause, 1, NULL);
+    WaitForSingleObject(sem_next, INFINITE);
+
+    ///////////////////2///////////////////////
+    for (int a = 0; a < 3; a++)
+    {
+        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток закончит работу
+        std::cout << "b" << std::flush;
+        computation();
+        ReleaseMutex(fMutex);
+    }
+
     return 0;
 }
 
 DWORD WINAPI Thread_d(LPVOID lpParam) {
+    UNREFERENCED_PARAMETER(lpParam);
+    ////////////////1///////////////////////
+    for (int a = 0; a < 3; a++)
+    {
+        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
+        std::cout << "d" << std::flush;
+        computation();
+        ReleaseMutex(fMutex);
+    }
+
+    ReleaseSemaphore(sem_pause, 1, NULL);
+    WaitForSingleObject(sem_next, INFINITE);
+
+    ///////////////2///////////////////////
+    for (int a = 0; a < 3; a++)
+    {
+        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
+        std::cout << "d" << std::flush;
+        computation();
+        ReleaseMutex(fMutex);
+    }
+
+    ReleaseSemaphore(sem_pause, 1, NULL);
+    WaitForSingleObject(sem_next, INFINITE);
+
+    /////////////////3//////////////////////
     for (int a = 0; a < 3; a++)
     {
         WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
@@ -121,29 +159,10 @@ DWORD WINAPI Thread_d(LPVOID lpParam) {
 }
 
 DWORD WINAPI Thread_c(LPVOID lpParam) {
-    // THREAD B
-    fThread[1] = CreateThread(NULL, 0, Thread_b, NULL, 0, &ThreadID);
-    // (1)NULL - аттрибуты безопасности
-    // (2)0 - размер стека
-    // (4)NULL - нет аргумента для функ.- тела потока
-    // (5)0 - флаг соз. потока
-    if (fThread[1] == NULL)
-    {
-        std::cout << "ERROR - Create Thread: " << GetLastError();
-        return 1;
-    }
-
-    // THREAD D
-    fThread[3] = CreateThread(NULL, 0, Thread_d, NULL, 0, &ThreadID);
-    // (1)NULL - аттрибуты безопасности
-    // (2)0 - размер стека
-    // (4)NULL - нет аргумента для функ.- тела потока
-    // (5)0 - флаг соз. потока
-    if (fThread[3] == NULL)
-    {
-        std::cout << "ERROR - Create Thread: " << GetLastError();
-        return 1;
-    }
+    UNREFERENCED_PARAMETER(lpParam);
+    /////////////////2//////////////////////////////
+    ReleaseSemaphore(sem_next, 1, NULL); // b
+    ReleaseSemaphore(sem_next, 1, NULL); // d
 
     for (int a = 0; a < 3; a++)
     {
@@ -154,10 +173,8 @@ DWORD WINAPI Thread_c(LPVOID lpParam) {
     }
 
     WaitForSingleObject(fThread[1], INFINITE); //b wait
-    WaitForSingleObject(fThread[3], INFINITE); //d wait
+    WaitForSingleObject(sem_pause, INFINITE); // d
 
-    CloseHandle(fThread[1]); // закрываем дескриптор потока
-    CloseHandle(fThread[3]); // закрываем дескриптор потока
 
     // THREAD E
     fThread[4] = CreateThread(NULL, 0, Thread_e, NULL, 0, &ThreadID);
@@ -173,23 +190,12 @@ DWORD WINAPI Thread_c(LPVOID lpParam) {
 
     WaitForSingleObject(fThread[4], INFINITE); //e wait
 
-    CloseHandle(fThread[4]); //e wait
     return 0;
 }
 
 DWORD WINAPI Thread_e(LPVOID lpParam) {
-    // THREAD D
-    fThread[3] = CreateThread(NULL, 0, Thread_d, NULL, 0, &ThreadID);
-    // (1)NULL - аттрибуты безопасности
-    // (2)0 - размер стека
-    // (4)NULL - нет аргумента для функ.- тела потока
-    // (5)0 - флаг соз. потока
-    if (fThread[3] == NULL)
-    {
-        std::cout << "ERROR - Create Thread: " << GetLastError();
-        return 1;
-    }
-
+    UNREFERENCED_PARAMETER(lpParam);
+    ////////////////3/////////////////////
     // THREAD F
     fThread[5] = CreateThread(NULL, 0, Thread_f, NULL, 0, &ThreadID);
     // (1)NULL - аттрибуты безопасности
@@ -214,6 +220,8 @@ DWORD WINAPI Thread_e(LPVOID lpParam) {
         return 1;
     }
 
+    ReleaseSemaphore(sem_next, 1, NULL); // d
+
     for (int a = 0; a < 3; a++)
     {
         WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
@@ -223,12 +231,7 @@ DWORD WINAPI Thread_e(LPVOID lpParam) {
     }
 
     WaitForSingleObject(fThread[3], INFINITE); //d wait
-    WaitForSingleObject(fThread[5], INFINITE); //f wait
-    WaitForSingleObject(fThread[6], INFINITE); //h wait
 
-    CloseHandle(fThread[3]); // закрываем дескриптор потока
-    CloseHandle(fThread[5]); // закрываем дескриптор потока
-    CloseHandle(fThread[6]); // закрываем дескриптор потока
 
     // THREAD G
     fThread[7] = CreateThread(NULL, 0, Thread_g, NULL, 0, &ThreadID);
@@ -244,12 +247,13 @@ DWORD WINAPI Thread_e(LPVOID lpParam) {
 
     WaitForSingleObject(fThread[7], INFINITE); //g wait
 
-    CloseHandle(fThread[7]); // закрываем дескриптор потока
     return 0;
 }
 
 DWORD WINAPI Thread_f(LPVOID lpParam)
 {
+    UNREFERENCED_PARAMETER(lpParam);
+    ///////////////3/////////////////
     for (int a = 0; a < 3; a++)
     {
         WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
@@ -257,11 +261,61 @@ DWORD WINAPI Thread_f(LPVOID lpParam)
         computation();
         ReleaseMutex(fMutex);
     }
+
+    ReleaseSemaphore(sem_pause, 1, NULL);
+    WaitForSingleObject(sem_next, INFINITE);
+    //////////////4//////////////////
+    for (int a = 0; a < 3; a++)
+    {
+        WaitForSingleObject(sem_F, INFINITY);
+        // sem_* дескриптор семафора
+        // INFINITY время ожидания
+        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
+        std::cout << "f" << std::flush;
+        computation();
+        ReleaseMutex(fMutex);
+        ReleaseSemaphore(sem_G, 1, NULL);
+        //sem_*  // дескриптор семафора
+        // 1           // увеличиваем значение счетчика на единицу
+        // NULL      // игнорируем предыдущее значение счетчика
+    }
+
     return 0;
 }
 
 DWORD WINAPI Thread_h(LPVOID lpParam)
 {
+    UNREFERENCED_PARAMETER(lpParam);
+    /////////////3/////////////////////
+    for (int a = 0; a < 3; a++)
+    {
+        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
+        std::cout << "h" << std::flush;
+        computation();
+        ReleaseMutex(fMutex);
+    }
+
+    ReleaseSemaphore(sem_pause, 1, NULL);
+    WaitForSingleObject(sem_next, INFINITE);
+    ////////////////4//////////////////////
+    for (int a = 0; a < 3; a++)
+    {
+        WaitForSingleObject(sem_H, INFINITY);
+        // sem_* дескриптор семафора
+        // INFINITY время ожидания
+        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
+        std::cout << "h" << std::flush;
+        computation();
+        ReleaseMutex(fMutex);
+        ReleaseSemaphore(sem_F, 1, NULL);
+        //sem_*  // дескриптор семафора
+        // 1           // увеличиваем значение счетчика на единицу
+        // NULL      // игнорируем предыдущее значение счетчика
+    }
+
+    ReleaseSemaphore(sem_pause, 1, NULL);
+    WaitForSingleObject(sem_next, INFINITE);
+    ///////////////5///////////////////
     for (int a = 0; a < 3; a++)
     {
         WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
@@ -274,29 +328,10 @@ DWORD WINAPI Thread_h(LPVOID lpParam)
 
 DWORD WINAPI Thread_g(LPVOID lpParam)
 {
-    // THREAD F
-    fThread[5] = CreateThread(NULL, 0, Thread_f_semaphore, NULL, 0, &ThreadID);
-    // (1)NULL - аттрибуты безопасности
-    // (2)0 - размер стека
-    // (4)NULL - нет аргумента для функ.- тела потока
-    // (5)0 - флаг соз. потока
-    if (fThread[5] == NULL)
-    {
-        std::cout << "ERROR - Create Thread: " << GetLastError();
-        return 1;
-    }
-
-    // THREAD H
-    fThread[6] = CreateThread(NULL, 0, Thread_h_semaphore, NULL, 0, &ThreadID);
-    // (1)NULL - аттрибуты безопасности
-    // (2)0 - размер стека
-    // (4)NULL - нет аргумента для функ.- тела потока
-    // (5)0 - флаг соз. потока
-    if (fThread[6] == NULL)
-    {
-        std::cout << "ERROR - Create Thread: " << GetLastError();
-        return 1;
-    }
+    UNREFERENCED_PARAMETER(lpParam);
+    ///////////////4//////////////
+    ReleaseSemaphore(sem_next, 1, NULL); // h
+    ReleaseSemaphore(sem_next, 1, NULL); // f
 
     for (int a = 0; a < 3; a++)
     {
@@ -312,11 +347,9 @@ DWORD WINAPI Thread_g(LPVOID lpParam)
         // 1           // увеличиваем значение счетчика на единицу
         // NULL      // игнорируем предыдущее значение счетчика
     }
-    WaitForSingleObject(fThread[5], INFINITE); //f_semaphore wait
-    WaitForSingleObject(fThread[6], INFINITE); //h_semaphore wait
 
-    CloseHandle(fThread[5]); // закрываем дескриптор потока
-    CloseHandle(fThread[6]); // закрываем дескриптор потока
+    WaitForSingleObject(fThread[5], INFINITE); //f
+
 
 
     // THREAD I
@@ -333,63 +366,15 @@ DWORD WINAPI Thread_g(LPVOID lpParam)
 
     WaitForSingleObject(fThread[8], INFINITE); //i wait
 
-    CloseHandle(fThread[8]);                   // закрываем дескриптор потока
-
     return 0;
 }
 
-DWORD WINAPI Thread_f_semaphore(LPVOID lpParam)
-{
-    for (int a = 0; a < 3; a++)
-    {
-        WaitForSingleObject(sem_F, INFINITY);
-        // sem_* дескриптор семафора
-        // INFINITY время ожидания
-        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
-        std::cout << "f" << std::flush;
-        computation();
-        ReleaseMutex(fMutex);
-        ReleaseSemaphore(sem_G, 1, NULL);
-        //sem_*  // дескриптор семафора
-        // 1           // увеличиваем значение счетчика на единицу
-        // NULL      // игнорируем предыдущее значение счетчика
-    }
-    return 0;
-}
-
-DWORD WINAPI Thread_h_semaphore(LPVOID lpParam)
-{
-    for (int a = 0; a < 3; a++)
-    {
-        WaitForSingleObject(sem_H, INFINITY);
-        // sem_* дескриптор семафора
-        // INFINITY время ожидания
-        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
-        std::cout << "h" << std::flush;
-        computation();
-        ReleaseMutex(fMutex);
-        ReleaseSemaphore(sem_F, 1, NULL);
-        //sem_*  // дескриптор семафора
-        // 1           // увеличиваем значение счетчика на единицу
-        // NULL      // игнорируем предыдущее значение счетчика
-    }
-    return 0;
-}
 
 DWORD WINAPI Thread_i(LPVOID lpParam)
 {
-    // THREAD H
-    fThread[6] = CreateThread(NULL, 0, Thread_h, NULL, 0, &ThreadID);
-    // (1)NULL - аттрибуты безопасности
-    // (2)0 - размер стека
-    // (4)NULL - нет аргумента для функ.- тела потока
-    // (5)0 - флаг соз. потока
-    if (fThread[6] == NULL)
-    {
-        std::cout << "ERROR - Create Thread: " << GetLastError();
-        return 1;
-    }
-
+    UNREFERENCED_PARAMETER(lpParam);
+    //////////////////5///////////////////
+    ReleaseSemaphore(sem_next, 1, NULL); // h
     // THREAD K
     fThread[9] = CreateThread(NULL, 0, Thread_k, NULL, 0, &ThreadID);
     // (1)NULL - аттрибуты безопасности
@@ -410,11 +395,7 @@ DWORD WINAPI Thread_i(LPVOID lpParam)
         ReleaseMutex(fMutex);
     }
 
-    WaitForSingleObject(fThread[6], INFINITE); //f wait
-    WaitForSingleObject(fThread[9], INFINITE); //k wait
-
-    CloseHandle(fThread[6]); // закрываем дескриптор потока
-    CloseHandle(fThread[9]); // закрываем дескриптор потока
+    WaitForSingleObject(fThread[6], INFINITE); //h wait
 
     // THREAD M
     fThread[10] = CreateThread(NULL, 0, Thread_m, NULL, 0, &ThreadID);
@@ -430,13 +411,24 @@ DWORD WINAPI Thread_i(LPVOID lpParam)
 
     WaitForSingleObject(fThread[10], INFINITE); //m wait
 
-    CloseHandle(fThread[10]); // закрываем дескриптор потока
-
     return 0;
 }
 
 DWORD WINAPI Thread_k(LPVOID lpParam)
 {
+    UNREFERENCED_PARAMETER(lpParam);
+    ///////////////////5////////////////
+    for (int a = 0; a < 3; a++)
+    {
+        WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
+        std::cout << "k" << std::flush;
+        computation();
+        ReleaseMutex(fMutex);
+    }
+
+    ReleaseSemaphore(sem_pause, 1, NULL);
+    WaitForSingleObject(sem_next, INFINITE);
+    //////////////////6///////////////////
     for (int a = 0; a < 3; a++)
     {
         WaitForSingleObject(fMutex, INFINITE); // ждем пока поток  закончит работу
@@ -449,18 +441,9 @@ DWORD WINAPI Thread_k(LPVOID lpParam)
 
 DWORD WINAPI Thread_m(LPVOID lpParam)
 {
-
-    // THREAD K
-    fThread[9] = CreateThread(NULL, 0, Thread_k, NULL, 0, &ThreadID);
-    // (1)NULL - аттрибуты безопасности
-    // (2)0 - размер стека
-    // (4)NULL - нет аргумента для функ.- тела потока
-    // (5)0 - флаг соз. потока
-    if (fThread[9] == NULL)
-    {
-        std::cout << "ERROR - Create Thread: " << GetLastError();
-        return 1;
-    }
+    UNREFERENCED_PARAMETER(lpParam);
+    /////////////////6///////////////////
+    ReleaseSemaphore(sem_next, 1, NULL); // k
 
     for (int a = 0; a < 3; a++)
     {
@@ -472,7 +455,6 @@ DWORD WINAPI Thread_m(LPVOID lpParam)
 
     WaitForSingleObject(fThread[9], INFINITE); //k wait
 
-    CloseHandle(fThread[9]); // закрываем дескриптор потока
     return 0;
 }
 
@@ -505,9 +487,23 @@ int lab3_init()
         return 1;
     }
 
+    sem_pause = CreateSemaphore(NULL, 0, 3, NULL);
+    if (sem_pause == NULL)
+    {
+        std::cout << "ERROR - Create Semaphore: " << GetLastError();
+        return 1;
+    }
+
+    sem_next = CreateSemaphore(NULL, 0, 3, NULL);
+    if (sem_next == NULL)
+    {
+        std::cout << "ERROR - Create Semaphore: " << GetLastError();
+        return 1;
+    }
+
     //NULL аттрибуты безопасности по умолчанию
-    //0 | 1   начальное значение счетчика
-    //0 | 1   максимаьлное значение счетчика
+    //0 | 1 ...   начальное значение счетчика
+    //0 | 1 ...   максимаьлное значение счетчика
     //NULL безымянный семафор
 
     //THREAD A
@@ -524,13 +520,13 @@ int lab3_init()
 
     WaitForSingleObject(fThread[0], INFINITE); //a wait
 
-    CloseHandle(fThread[0]); // закрываем дескриптор потока
-
     CloseHandle(fMutex);
 
     CloseHandle(sem_F);
     CloseHandle(sem_G);
     CloseHandle(sem_H);
+    CloseHandle(sem_pause);
+    CloseHandle(sem_next);
 
     return 0;
 }
